@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from db.database import create_tables, engine
 from db.models import Keyword, KeywordCreate, KeywordRead, KeywordUpdate
+from recon_section4 import run_recon
 
 
 @asynccontextmanager
@@ -76,3 +77,16 @@ def delete_keyword(keyword_id: int):
             raise HTTPException(status_code=404, detail="Keyword not found")
         session.delete(keyword)
         session.commit()
+
+
+# --- TODO Section 4: Target Site Recon ---
+
+
+@app.get("/recon/section4", summary="Re-run the Section 4 recon checks against the jobvision API")
+def recon_section4():
+    """Same checks as recon_section4.py (no-cookies call, keyword param,
+    pagination, job URL pattern), returned as JSON.
+
+    Takes a few seconds — it makes several live calls to the target API.
+    """
+    return run_recon()

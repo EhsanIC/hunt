@@ -1,14 +1,18 @@
-"""One-off recon for TODO Section 4: jobvision.ir job-search API.
+"""Recon for TODO Section 4: jobvision.ir job-search API.
 
 Checks:
 1. Plain httpx POST with no cookies / browser session (header tiers if needed)
 2. Keyword really is the POST body field `keyword` (different keyword -> different jobs)
 3. Pagination shape (requestedPage/pageSize in, current-page + total count out)
 4. Real job-posting URL pattern (resolve /jobs/{id}, follow redirects)
+
+Run standalone:  python recon_section4.py   (prints the same JSON the endpoint returns)
+Run via the app: GET /recon/section4        (wired up in main.py)
 """
 
 import json
 import re
+import sys
 import time
 
 import httpx
@@ -31,20 +35,20 @@ UA = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
-
-def attempt(client, body, label, headers=None):
-    print(f"\n=== {label} ===")
-    r = client.post(API, json=body, headers=headers)
-    ctype = r.headers.get("content-type", "").split(";")[0]
-    print(f"status={r.status_code} content-type={ctype}")
-    if "json" not in ctype:
-        print("non-JSON body head:", r.text[:160].replace("\n", " "))
-        return None
-    body = r.json()
-    # API wraps the payload in an envelope: {traceId, isSuccess, statusCode, message, data}
-    if isinstance(body.get("data"), (dict, list)):
-        return body["data"]
-    return body
+# Escalating header tiers, all still cookie-less
+HEADER_TIERS = [
+    ("plain default UA", None),
+    ("browser User-Agent", {"User-Agent": UA}),
+    (
+        "UA + Referer/Origin/Accept",
+        {
+            "User-Agent": UA,
+            "Referer": f"{SITE}/jobs",
+            "Origin": SITE,
+            "Accept": "application/json",
+        },
+    ),
+]
 
 
 def jobs_of(data):
@@ -54,91 +58,145 @@ def jobs_of(data):
     return next((v for v in data.values() if isinstance(v, list)), [])
 
 
-def main():
-    with httpx.Client(timeout=20) as client:
-        # 1) no cookies, no special headers
-        data = attempt(client, BASE_BODY, "1) plain httpx (default UA, no cookies)")
-        tier = "plain default UA"
-        if data is None:
-            time.sleep(1)
-            data = attempt(
-                client, BASE_BODY, "2) + browser User-Agent (still no cookies)",
-                headers={"User-Agent": UA},
-            )
-            tier = "browser User-Agent"
-        if data is None:
-            time.sleep(1)
-            data = attempt(
-                client, BASE_BODY, "3) + UA + Referer/Origin/Accept (no cookies)",
-                headers={"User-Agent": UA, "Referer": f"{SITE}/jobs", "Origin": SITE,
-                         "Accept": "application/json"},
-            )
-            tier = "UA + Referer/Origin/Accept"
-        if data is None:
-            print("\nRESULT: plain httpx NOT enough - Playwright fallback likely required")
-            return
+def _attempt(client, body, headers=None):
+    """POST to the API. Returns (data, error): envelope-unwrapped payload, or an error string."""
+    try:
+        r = client.post(API, json=body, headers=headers)
+    except (httpx.HTTPError, ValueError) as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+    ctype = r.headers.get("content-type", "").split(";")[0]
+    if r.status_code != 200 or "json" not in ctype:
+        head = r.text[:120].replace("\n", " ")
+        return None, f"status={r.status_code} content-type={ctype} head={head!r}"
+    try:
+        payload = r.json()
+    except ValueError as exc:
+        return None, f"JSONDecodeError: {exc}"
+    # API wraps the payload in an envelope: {traceId, isSuccess, statusCode, message, data}
+    if isinstance(payload.get("data"), (dict, list)):
+        payload = payload["data"]
+    return payload, None
 
-        print(f"\n>>> works with: {tier} (no cookies sent)")
+
+def _get_job_page(client, path):
+    """GET a site URL following redirects. Returns (final_url, status, title, error)."""
+    try:
+        r = client.get(f"{SITE}{path}", headers={"User-Agent": UA}, follow_redirects=True)
+    except httpx.HTTPError as exc:
+        return None, None, None, f"{type(exc).__name__}: {exc}"
+    m = re.search(r"<title>(.*?)</title>", r.text, re.S)
+    return (
+        str(r.url),
+        r.status_code,
+        m.group(1).strip()[:140] if m else None,
+        None,
+    )
+
+
+def run_recon() -> dict:
+    """Run all Section 4 checks and return the results as a structured dict."""
+    out: dict = {}
+
+    with httpx.Client(timeout=20) as client:
+        # 1) no cookies, escalating header tiers
+        data = error = None
+        tier = None
+        for tier_label, headers in HEADER_TIERS:
+            data, error = _attempt(client, BASE_BODY, headers=headers)
+            tier = tier_label
+            if data is not None:
+                break
+            time.sleep(1)
+        if data is None:
+            return {
+                "tier_tried": tier,
+                "error": error,
+                "verdict": "plain httpx NOT enough - Playwright fallback likely required",
+            }
+        out["no_cookies"] = {"works_with": tier}
 
         # 2) response shape + pagination
-        scalars = {k: v for k, v in data.items() if not isinstance(v, (list, dict))}
-        print("data-level scalar fields:", json.dumps(scalars, ensure_ascii=False))
-        print("data-level list fields:", {k: len(v) for k, v in data.items() if isinstance(v, list)})
-
         jobs = jobs_of(data)
-        if not jobs:
-            print("no jobPosts list; top-level keys:", list(data.keys()))
-            return
-        print("jobPosts count:", len(jobs))
-        first = jobs[0]
-        print("jobPosts[0] keys:", sorted(first.keys()))
-        comp = first.get("company") or {}
-        print(
-            "jobPosts[0] sample:",
-            json.dumps(
-                {"id": first.get("id"), "title": first.get("title"),
-                 "jobUrl": first.get("jobUrl"),
-                 "company": {k: comp.get(k) for k in ("nameFa", "pageUrl")}},
-                ensure_ascii=False,
-            ),
-        )
-        react_first = (first.get("id"), first.get("title"))
+        first = jobs[0] if jobs else None
+        comp = (first.get("company") or {}) if first else {}
+        out["response_shape"] = {
+            "job_posts": jobs,  # full first page, raw entries as returned by the API
+            "data_scalars": {
+                k: v for k, v in data.items() if not isinstance(v, (list, dict))
+            },
+            "data_lists": {
+                k: len(v) for k, v in data.items() if isinstance(v, list)
+            },
+            "jobposts_entry_keys": sorted(first.keys()) if first else None,
+        }
+        react_first = (first.get("id"), first.get("title")) if first else None
 
         # 3) different keyword -> different results?
         time.sleep(1)
-        d2 = attempt(client, {**BASE_BODY, "keyword": "django"}, "4) keyword=django")
-        if d2:
+        d2, err2 = _attempt(client, {**BASE_BODY, "keyword": "django"})
+        out["keyword_param"] = {"call_ok": d2 is not None, "error": err2}
+        if d2 is not None:
             j2 = jobs_of(d2)
-            print("django first 3:", [(j.get("id"), j.get("title")) for j in j2[:3]])
-            if j2:
-                print("DIFFERENT from react:",
-                      (j2[0].get("id"), j2[0].get("title")) != react_first)
+            django_first = (j2[0].get("id"), j2[0].get("title")) if j2 else None
+            out["keyword_param"].update(
+                {
+                    "django_first_3": [(j.get("id"), j.get("title")) for j in j2[:3]],
+                    "different_from_react": django_first != react_first,
+                }
+            )
 
         # 4) page 2 -> different results?
         time.sleep(1)
-        d3 = attempt(client, {**BASE_BODY, "requestedPage": 2}, "5) requestedPage=2")
-        if d3:
+        d3, err3 = _attempt(client, {**BASE_BODY, "requestedPage": 2})
+        out["pagination"] = {"page2_error": err3}
+        if d3 is not None:
             j3 = jobs_of(d3)
-            print("page2 first 3:", [(j.get("id"), j.get("title")) for j in j3[:3]])
+            out["pagination"].update(
+                {
+                    "page2_scalars": {
+                        k: v
+                        for k, v in d3.items()
+                        if not isinstance(v, (list, dict))
+                    },
+                    "page2_first_3": [(j.get("id"), j.get("title")) for j in j3[:3]],
+                }
+            )
 
         # 5) URL pattern: resolve /jobs/{id} and follow redirects
-        jid = first.get("id")
-        time.sleep(1)
-        print(f"\n=== 6) resolve {SITE}/jobs/{jid} ===")
-        r = client.get(f"{SITE}/jobs/{jid}", headers={"User-Agent": UA},
-                       follow_redirects=True)
-        print("status:", r.status_code)
-        print("final url:", str(r.url))
-        m = re.search(r"<title>(.*?)</title>", r.text, re.S)
-        if m:
-            print("page <title>:", m.group(1).strip()[:140])
+        jid = first.get("id") if first else None
+        out["url_pattern"] = {}
+        if jid is None:
+            out["url_pattern"]["error"] = "no job id available to test"
+        else:
+            time.sleep(1)
+            final, status, title, err4 = _get_job_page(client, f"/jobs/{jid}")
+            out["url_pattern"]["bare_id"] = {
+                "url": f"{SITE}/jobs/{jid}",
+                "status": status,
+                "final_url": final,
+                "page_title": title,
+                "error": err4,
+            }
+            time.sleep(1)
+            final2, status2, _title2, err5 = _get_job_page(
+                client, f"/jobs/{jid}/placeholder-slug"
+            )
+            out["url_pattern"]["fake_slug"] = {
+                "url": f"{SITE}/jobs/{jid}/placeholder-slug",
+                "status": status2,
+                "final_url": final2,
+                "error": err5,
+            }
+            out["url_pattern"]["company_pageUrl_shape"] = comp.get("pageUrl")
 
-        time.sleep(1)
-        r2 = client.get(f"{SITE}/jobs/{jid}/placeholder-slug", headers={"User-Agent": UA},
-                        follow_redirects=True)
-        print("with fake slug -> status:", r2.status_code, "final url:", str(r2.url))
+    return out
 
-        print("\ncompany.pageUrl shape:", comp.get("pageUrl"))
+
+def main():
+    # Windows consoles may not default to UTF-8; job titles/company names are Persian
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    print(json.dumps(run_recon(), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
