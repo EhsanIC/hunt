@@ -23,7 +23,8 @@ Decisions locked in:
 - [x] Create venv, install fastapi, uvicorn, playwright, httpx
 - [x] Create `main.py` with a health-check route
 - [X] `pip install sqlmodel`
-- [x] Folder structure: `main.py`, `scraper.py`, `models.py`, `database.py`
+- [x] Folder structure: `main.py`, `scraper.py`, `db/models.py`, `db/database.py`
+      (database-related files grouped in a `db/` package)
 
 **Manual test:**
 1. `uvicorn main:app --reload`

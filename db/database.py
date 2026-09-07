@@ -4,8 +4,8 @@ from datetime import datetime
 from sqlmodel import Session, SQLModel, create_engine
 
 # Imported so SQLModel.metadata is registered before create_tables() runs
-# (models.py does not import database.py, so there is no circular import).
-from models import Job, Keyword  # noqa: F401
+# (db/models.py does not import database.py, so there is no circular import).
+from db.models import Job, Keyword  # noqa: F401
 
 DB_FILE = "jobs.db"
 DATABASE_URL = f"sqlite:///{DB_FILE}"
