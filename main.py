@@ -6,7 +6,16 @@ from fastapi import FastAPI, HTTPException
 from sqlmodel import Session, select
 
 from db.database import create_tables, engine
-from db.models import Job, JobStatus, Keyword, KeywordCreate, KeywordRead, KeywordUpdate
+from db.models import (
+    Job,
+    JobRead,
+    JobStatus,
+    JobUpdate,
+    Keyword,
+    KeywordCreate,
+    KeywordRead,
+    KeywordUpdate,
+)
 from scraper import search_jobs
 
 REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between keyword requests
@@ -83,10 +92,7 @@ def delete_keyword(keyword_id: int):
         session.commit()
 
 
-# --- TODO Section 6: Scraper + Database + Keywords, wired together ---
-
-
-@app.post("/scrape")
+# --- TODO Section 6: Scraper + Database + Keywords, wired together ---@app.post("/scrape")
 async def scrape():
     """Scrape all active keywords and store new jobs (deduped by url).
 
@@ -156,4 +162,32 @@ async def scrape():
         "skipped_existing": skipped_count,
         "errors": errors,
     }
+
+
+
+# --- TODO Section 7: Viewing & Status Updates ---
+
+
+@app.get("/jobs", response_model=list[JobRead])
+def list_jobs(status: JobStatus | None = None):
+    """List jobs, optionally filtered by status (found / applied / rejected)."""
+    with Session(engine) as session:
+        query = select(Job).order_by(Job.id)
+        if status is not None:
+            query = query.where(Job.status == status)
+        return list(session.exec(query).all())
+
+
+@app.patch("/jobs/{job_id}", response_model=JobRead)
+def update_job_status(job_id: int, update: JobUpdate):
+    """Update a job's status (mark it as applied or rejected)."""
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        job.status = update.status
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job
 

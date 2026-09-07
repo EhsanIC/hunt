@@ -52,3 +52,20 @@ class KeywordRead(SQLModel):
     text: str
     active: bool
     created_at: datetime
+
+
+class JobRead(SQLModel):
+    id: int
+    keyword_id: int
+    title: str
+    company: str
+    url: str
+    source_site: str
+    found_at: datetime
+    status: JobStatus
+
+
+class JobUpdate(SQLModel):
+    """PATCH body: the job's new status (applied / rejected / found)."""
+
+    status: JobStatus

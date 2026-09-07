@@ -225,9 +225,9 @@ body ->
 
 ## 7. Viewing & Status Updates
 **Tasks:**
-- [ ] `GET /jobs` — list jobs, filterable by status (found / applied / rejected)
-- [ ] `PATCH /jobs/{id}` — update a job's status (mark as applied or rejected)
-- [ ] Response includes the job's `url` so you can click through to the real posting
+- [x] `GET /jobs` — list jobs, filterable by status (found / applied / rejected)
+- [x] `PATCH /jobs/{id}` — update a job's status (mark as applied or rejected)
+- [x] Response includes the job's `url` so you can click through to the real posting
 
 **Manual test:**
 1. `GET /jobs?status=found` → confirm only unactioned jobs show, and each has a clickable `url`
@@ -238,6 +238,16 @@ body ->
 6. Restart the app → repeat step 5 → confirm the status stuck (persistence check)
 
 **Pass = filtering by status works correctly, and status changes survive a restart.**
+
+> Done 2026-09-07: passed — `GET /jobs?status=found` returned all 53 jobs with
+> real jobvision URLs; PATCH job 1 → applied, job 2 → rejected; afterwards
+> `found` had 51 (both gone), `applied` = [1], `rejected` = [2].
+> Server restarted → applied/rejected still exactly as left (persistence OK).
+> Edge cases: `?status=nonsense` → 422 (FastAPI validates the enum), PATCH
+> unknown id → 404, PATCH with invalid status body → 422.
+> Implementation notes: `JobRead`/`JobUpdate` schemas added to `db/models.py`
+> (`JobUpdate.status` is the `JobStatus` enum, so bad values are rejected by
+> validation); `/jobs` filter is optional — no param returns all jobs.
 
 ---
 
