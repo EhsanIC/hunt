@@ -58,10 +58,10 @@ Decisions locked in:
 
 ## 3. Keyword Management (CRUD)
 **Tasks:**
-- [ ] `POST /keywords` — add a keyword
-- [ ] `GET /keywords` — list all keywords
-- [ ] `DELETE /keywords/{id}` — remove a keyword
-- [ ] (optional) `PATCH /keywords/{id}` — toggle active/inactive instead of hard delete
+- [x] `POST /keywords` — add a keyword
+- [x] `GET /keywords` — list all keywords
+- [x] `DELETE /keywords/{id}` — remove a keyword
+- [x] (optional) `PATCH /keywords/{id}` — toggle active/inactive instead of hard delete
 
 **Manual test:**
 1. Via `/docs`, `POST /keywords` with 2–3 real keywords (e.g. `"برنامه‌نویس فرانت‌اند"`)
@@ -72,6 +72,13 @@ Decisions locked in:
 5. Cross-check directly in the db: `sqlite3 jobs.db "SELECT * FROM keyword;"`
 
 **Pass = keywords survive a restart, and the DB row count matches what `/docs` shows.**
+
+> Done 2026-09-07: passed — tested via curl/httpx (equivalent to the `/docs` calls).
+> Extras added: duplicate keyword → 409, empty/whitespace text → 422, unknown id → 404;
+> PATCH toggles with no body, or sets explicitly with `{"active": true/false}`.
+> Note: Windows shell mangles Persian text passed to `curl -d` (stored as literal `?`) —
+> add Persian keywords via `/docs` (browser sends proper UTF-8), which was verified to
+> store correctly (Unicode code points checked in the DB).
 
 ---
 

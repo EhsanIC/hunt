@@ -32,3 +32,23 @@ class Job(SQLModel, table=True):
     source_site: str
     found_at: datetime = Field(default_factory=utcnow)
     status: JobStatus = Field(default=JobStatus.FOUND)
+
+
+# --- API request/response schemas (not tables) ---
+
+
+class KeywordCreate(SQLModel):
+    text: str
+
+
+class KeywordUpdate(SQLModel):
+    """PATCH body; omit `active` to simply toggle it."""
+
+    active: bool | None = None
+
+
+class KeywordRead(SQLModel):
+    id: int
+    text: str
+    active: bool
+    created_at: datetime
