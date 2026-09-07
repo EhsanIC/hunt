@@ -22,8 +22,8 @@ Decisions locked in:
 **Tasks:**
 - [x] Create venv, install fastapi, uvicorn, playwright, httpx
 - [x] Create `main.py` with a health-check route
-- [ ] `pip install sqlmodel`
-- [ ] Folder structure: `main.py`, `scraper.py`, `models.py`, `database.py`
+- [X] `pip install sqlmodel`
+- [x] Folder structure: `main.py`, `scraper.py`, `models.py`, `database.py`
 
 **Manual test:**
 1. `uvicorn main:app --reload`
@@ -36,11 +36,11 @@ Decisions locked in:
 
 ## 2. Database Schema
 **Tasks:**
-- [ ] Define `Keyword` table: id, text, active (bool), created_at
-- [ ] Define `Job` table: id, keyword_id (FK), title, company, url, source_site,
+- [x] Define `Keyword` table: id, text, active (bool), created_at
+- [x] Define `Job` table: id, keyword_id (FK), title, company, url, source_site,
       found_at, status (enum: found / applied / rejected)
-- [ ] Set up SQLite file + SQLModel engine in `database.py`
-- [ ] Create tables on app startup
+- [x] Set up SQLite file + SQLModel engine in `database.py`
+- [x] Create tables on app startup
 
 **Manual test:**
 1. Delete any old `.db` file, then start the app: `uvicorn main:app --reload`
@@ -49,6 +49,9 @@ Decisions locked in:
 4. `sqlite3 jobs.db ".schema job"` → confirm columns match the list above
 
 **Pass = both tables exist with the right columns, verified via `sqlite3` CLI (or DB Browser for SQLite).**
+
+> Done 2026-09-07: passed — `sqlite3` CLI not installed here, so `.tables`/`.schema`
+> were verified via Python's built-in `sqlite3` module instead (equivalent output).
 
 ---
 
