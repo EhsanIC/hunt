@@ -83,17 +83,22 @@ Decisions locked in:
 ---
 
 ## 4. Target Site Recon
+
+URL -> https://candidateapi.jobvision.ir/api/v1/JobPost/List
+body -> 
+{"pageSize":30,"requestedPage":1,"sortBy":1,"lastSeen":"2026-08-23T14:02:41.987","locationWrapper":"mashhad","keyword":"react","searchId":null}
+
 **Tasks:**
 - [x] Pick one job site to start with
 - [x] Found a real JSON API for job search (via DevTools → Network → XHR/Fetch) —
       no HTML scraping needed for the listing data
-- [ ] Confirm the API works **without** browser auth/cookies (plain `httpx` call, no session)
-- [ ] Confirm how the keyword is actually sent (query param vs POST body — check the
+- [x] Confirm the API works **without** browser auth/cookies (plain `httpx` call, no session)
+- [x] Confirm how the keyword is actually sent (query param vs POST body — check the
       request's Payload/Headers tab)
-- [ ] Confirm the job posting URL pattern (the API returns `id`, not a direct `url` —
+- [x] Confirm the job posting URL pattern (the API returns `id`, not a direct `url` —
       likely `https://<site>/jobs/{id}/{slug}`, same shape as `company.pageUrl`;
       open one real job and check)
-- [ ] Note pagination shape: `currentPage`, `pageSize`, and total count field
+- [x] Note pagination shape: `currentPage`, `pageSize`, and total count field
 
 **Manual test:**
 1. Right-click the working API request in DevTools → Copy → Copy as cURL
@@ -105,6 +110,24 @@ Decisions locked in:
    come back (proves you found the right parameter, not a cached/default response)
 
 **Pass = the cURL command runs standalone (no cookies needed) and returns different, real job data for different keywords, and you have the confirmed job-URL pattern written down.**
+
+> Done 2026-09-07: passed — verified via `recon_section4.py` (plain `httpx` calls, the
+> equivalent of the "Copy as cURL" step). Findings:
+> - **No cookies/auth needed:** plain POST with httpx's *default* User-Agent, no cookies,
+>   no special headers → `200` with JSON. No Playwright fallback required.
+> - **Keyword is a POST body field** (`"keyword": "react"`), not a query param —
+>   switching it to `django` returned a completely different result set.
+> - **Response envelope:** top-level `{traceId, isSuccess, statusCode, message, data}`;
+>   the job list lives at `data.jobPosts[]` (Section 5 must unwrap `data`).
+>   Each entry has `id`, `title`, `company.nameFa`, `company.pageUrl` — no `jobUrl` field.
+> - **Job URL pattern:** `https://jobvision.ir/jobs/{id}` — the site redirects to the
+>   canonical `/jobs/{id}/{slug}` and a wrong/placeholder slug is ignored (redirects to
+>   the real one). So build URLs from `id` alone: `https://jobvision.ir/jobs/{id}`.
+>   Verified live: id `1485541` → real posting, title "استخدام Front-End Developer در دان".
+> - **Pagination:** request sends `requestedPage` + `pageSize`; response `data` echoes
+>   `currentPage`, `pageSize`, and the total `jobPostCount` (16 for react/mashhad).
+>   Out-of-range pages just return an empty `jobPosts[]`. Loop cap: while collected
+>   `< jobPostCount`, increment `requestedPage`.
 
 ---
 
