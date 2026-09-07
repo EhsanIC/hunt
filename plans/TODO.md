@@ -133,15 +133,15 @@ body ->
 
 ## 5. Standalone Scraper Script
 **Tasks:**
-- [ ] Write `scraper.py` as a plain script (not inside FastAPI yet)
-- [ ] Use `httpx` to call the job search API directly with a keyword param
-- [ ] Parse the JSON response into a list of dicts: `title`, `company` (`.nameFa`),
+- [x] Write `scraper.py` as a plain script (not inside FastAPI yet)
+- [x] Use `httpx` to call the job search API directly with a keyword param
+- [x] Parse the JSON response into a list of dicts: `title`, `company` (`.nameFa`),
       `url` (built from `id` using the pattern confirmed in Section 4), plus
       `source_site`
-- [ ] Handle pagination: loop `currentPage` until you've pulled all pages (or a
+- [x] Handle pagination: loop `currentPage` until you've pulled all pages (or a
       sane cap, e.g. first 5 pages) using the total count field from the response
-- [ ] Function signature: `search_jobs(keyword: str) -> list[dict]`
-- [ ] Run via `python scraper.py` with a test keyword, print results
+- [x] Function signature: `search_jobs(keyword: str) -> list[dict]`
+- [x] Run via `python scraper.py` with a test keyword, print results
 - [ ] **Fallback plan (only if httpx gets blocked):** if the plain `httpx` call
       returns errors/empty data that the browser call didn't, keep a Playwright
       version in reserve — same function signature, swapped implementation, so the
@@ -159,16 +159,30 @@ body ->
 
 **Pass = printed list of real jobs with zero browser automation involved, and their URLs actually resolve to real postings when clicked.**
 
+> Done 2026-09-07: passed — `python scraper.py react` printed 16 real jobs
+> (matches recon's `jobPostCount: 16`), all with non-empty title/company/url,
+> no browser involved. `python scraper.py django` returned a completely
+> different set (4 jobs) — results really do follow the keyword.
+> Implementation notes:
+> - Pagination stops on an empty page, when collected >= `jobPostCount`, or at
+>   the 5-page cap; 1s delay between page requests.
+> - Results deduped by url within a run (Section 6 dedupes against the DB).
+> - URL pattern pre-verified in Section 4 recon (id 1485541 → real posting),
+>   and the same id appears as result #1 here.
+> - `lastSeen` stays at its capture-time value; API still returns current
+>   listings with it.
+> - Fallback plan NOT triggered — plain httpx worked throughout.
+
 ---
 
 ## 6. Scraper + Database + Keywords, Wired Together
 **Tasks:**
-- [ ] Convert scraper to async (`httpx.AsyncClient`) — no browser lifecycle to manage,
+- [x] Convert scraper to async (`httpx.AsyncClient`) — no browser lifecycle to manage,
       since Playwright is no longer in the request path
-- [ ] Add a reasonable delay/rate-limit between requests per keyword, since you're
+- [x] Add a reasonable delay/rate-limit between requests per keyword, since you're
       calling the API directly now (be a good citizen — no browser overhead means
       it's easy to accidentally hammer the endpoint)
-- [ ] Add `POST /scrape` (or a scheduled/background job) that: loops over all active
+- [x] Add `POST /scrape` (or a scheduled/background job) that: loops over all active
       keywords → calls `search_jobs()` for each → saves new jobs to the `Job` table
       with status "found" → skips jobs already stored (dedupe by url)
 - [ ] (Only if Section 5's fallback plan was triggered) launch the Playwright browser
@@ -185,6 +199,27 @@ body ->
    should complete much faster than a Playwright-based scrape would have
 
 **Pass = jobs appear per-keyword in the DB, re-scraping doesn't create duplicates, and the scrape completes quickly with no browser involved.**
+
+> Done 2026-09-07: passed — 4 active keywords (`python developer`, `django`,
+> `برنامه‌نویس فرانت‌اند`, `testing`).
+> - First `POST /scrape`: 10.6s, `keywords_searched: 4, new_jobs: 53,
+>   skipped_existing: 0, errors: []`. DB check: 53 rows, 53 distinct urls,
+>   grouped per keyword (17/29/7 — the 3 keywords that returned results;
+>   `testing` had no matches).
+> - Second `POST /scrape` immediately after: 10.3s, `new_jobs: 0,
+>   skipped_existing: 53` — row count unchanged, dedupe by url works.
+> - No browser involved; ~10s for 4 keywords is dominated by the 1s politeness
+>   delays between keywords and between result pages.
+> Implementation notes:
+> - `search_jobs(client, keyword)` is now async and takes a shared
+>   `httpx.AsyncClient` (connection pooling across keywords); CLI runner wraps
+>   it in its own client, so `python scraper.py react` still works standalone.
+> - `/scrape` dedupes against the DB by url AND within a single run (a job
+>   matching two keywords is stored once, under the first keyword that found it).
+> - Per-keyword failures are caught and reported in the response's `errors`
+>   list; one bad keyword doesn't abort the run.
+> - The `/recon/section4` route and its import were removed from `main.py`
+>   (recon is done; `recon_section4.py` still runs standalone).
 
 ---
 

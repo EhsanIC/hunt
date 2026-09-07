@@ -1,11 +1,15 @@
+import asyncio
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from sqlmodel import Session, select
 
 from db.database import create_tables, engine
-from db.models import Keyword, KeywordCreate, KeywordRead, KeywordUpdate
-from recon_section4 import run_recon
+from db.models import Job, JobStatus, Keyword, KeywordCreate, KeywordRead, KeywordUpdate
+from scraper import search_jobs
+
+REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between keyword requests
 
 
 @asynccontextmanager
@@ -79,14 +83,77 @@ def delete_keyword(keyword_id: int):
         session.commit()
 
 
-# --- TODO Section 4: Target Site Recon ---
+# --- TODO Section 6: Scraper + Database + Keywords, wired together ---
 
 
-@app.get("/recon/section4", summary="Re-run the Section 4 recon checks against the jobvision API")
-def recon_section4():
-    """Same checks as recon_section4.py (no-cookies call, keyword param,
-    pagination, job URL pattern), returned as JSON.
+@app.post("/scrape")
+async def scrape():
+    """Scrape all active keywords and store new jobs (deduped by url).
 
-    Takes a few seconds — it makes several live calls to the target API.
+    Also dedupes within a single run (a job matching two keywords is stored
+    once, under the first keyword that found it).
     """
-    return run_recon()
+    new_count = 0
+    skipped_count = 0
+    keywords_searched = 0
+    errors: list[str] = []
+    seen_urls: set[str] = set()
+
+    with Session(engine) as session:
+        active = list(
+            session.exec(
+                select(Keyword).where(Keyword.active).order_by(Keyword.id)
+            ).all()
+        )
+
+        if not active:
+            return {
+                "keywords_searched": 0,
+                "new_jobs": 0,
+                "skipped_existing": 0,
+                "errors": [],
+                "message": "No active keywords — add some via POST /keywords first.",
+            }
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            for i, keyword in enumerate(active):
+                if i > 0:
+                    await asyncio.sleep(REQUEST_DELAY_SECONDS)
+                try:
+                    jobs = await search_jobs(client, keyword.text)
+                except Exception as exc:  # keep going: one bad keyword shouldn't kill the run
+                    errors.append(f"keyword {keyword.text!r}: {type(exc).__name__}: {exc}")
+                    continue
+                keywords_searched += 1
+
+                for job in jobs:
+                    if job["url"] in seen_urls:
+                        continue
+                    seen_urls.add(job["url"])
+                    existing = session.exec(
+                        select(Job).where(Job.url == job["url"])
+                    ).first()
+                    if existing:
+                        skipped_count += 1
+                        continue
+                    session.add(
+                        Job(
+                            keyword_id=keyword.id,
+                            title=job["title"],
+                            company=job["company"],
+                            url=job["url"],
+                            source_site=job["source_site"],
+                            status=JobStatus.FOUND,
+                        )
+                    )
+                    new_count += 1
+
+        session.commit()
+
+    return {
+        "keywords_searched": keywords_searched,
+        "new_jobs": new_count,
+        "skipped_existing": skipped_count,
+        "errors": errors,
+    }
+
