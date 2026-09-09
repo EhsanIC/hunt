@@ -14,9 +14,9 @@ export function JobHuntDashboard() {
   const [status, setStatus] = useState<JobStatus>("found")
 
   return (
-    <main className="min-h-screen bg-muted/30">
+    <main className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-8">
-        <header className="flex flex-col gap-4 rounded-xl border bg-background p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-primary p-2 text-primary-foreground"><BriefcaseBusiness className="size-5" /></div>
             <div>
