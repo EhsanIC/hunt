@@ -6,7 +6,8 @@ import { Check, ExternalLink, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 import { useJobs } from "@/hooks/use-jobs"
 import { useUpdateJobStatus } from "@/hooks/use-update-job-status"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -69,9 +70,15 @@ export function JobsTable() {
         const isUpdating = mutation.isPending && mutation.variables?.id === job.id
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button render={<a href={job.url} target="_blank" rel="noopener noreferrer" />} variant="ghost" size="icon-sm" aria-label={`Open ${job.title}`}>
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+              aria-label={`Open ${job.title}`}
+            >
               <ExternalLink />
-            </Button>
+            </a>
             {job.status !== "applied" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} applied`} disabled={isUpdating} onClick={() => updateStatus(job, "applied")}><Check /></Button>}
             {job.status !== "rejected" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} rejected`} disabled={isUpdating} onClick={() => updateStatus(job, "rejected")}><X /></Button>}
             {isUpdating && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
