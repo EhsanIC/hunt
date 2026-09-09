@@ -15,7 +15,7 @@ export function ScrapeButton() {
   function handleScrape() {
     mutation.mutate(undefined, {
       onSuccess: (result) => {
-        const details = `${result.keywords_searched} keywords searched, ${result.new_jobs} new jobs, ${result.skipped_existing} existing jobs skipped.`
+        const details = `${result.searches_searched} saved searches run, ${result.new_jobs} new jobs, ${result.skipped_existing} existing jobs skipped.`
         const errors = result.errors.length > 0 ? ` Errors: ${result.errors.join("; ")}` : ""
         toast.success("Scrape complete", { description: `${details}${errors}` })
       },

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { useSearchJobs } from "@/hooks/use-search-jobs"
+import { useSaveSearch } from "@/hooks/use-saved-searches"
 import type { SearchFilters, SearchJob } from "@/lib/job-hunt-api"
 
 type FormValues = {
@@ -26,6 +27,7 @@ function errorMessage(error: unknown) {
 
 export function JobSearchForm({ onResults }: { onResults: (jobs: SearchJob[], count: number) => void }) {
   const mutation = useSearchJobs()
+  const saveMutation = useSaveSearch()
   const form = useForm<FormValues>({
     defaultValues: {
       keyword: "",
@@ -40,7 +42,7 @@ export function JobSearchForm({ onResults }: { onResults: (jobs: SearchJob[], co
   const isRemote = useWatch({ control: form.control, name: "isRemote" })
   const isInternship = useWatch({ control: form.control, name: "isInternship" })
 
-  function onSubmit(values: FormValues) {
+  function filtersFromValues(values: FormValues): SearchFilters {
     const experienceValues = values.workExperiences
       .split(",")
       .map((value) => value.trim())
@@ -48,15 +50,19 @@ export function JobSearchForm({ onResults }: { onResults: (jobs: SearchJob[], co
       .map(Number)
       .filter((value) => Number.isInteger(value))
 
-    const filters: SearchFilters = {
+    return {
       keyword: values.keyword.trim() || undefined,
       locationWrapper: values.locationWrapper.trim() || undefined,
       jobCategoryUrlTitle: values.jobCategoryUrlTitle.trim() || undefined,
       workExperiences: experienceValues.length ? experienceValues : undefined,
-      isRemote: values.isRemote ? true : undefined,
-      isInternship: values.isInternship ? true : undefined,
+      isRemote: values.isRemote,
+      isInternship: values.isInternship,
       sortBy: Number(values.sortBy),
     }
+  }
+
+  function onSubmit(values: FormValues) {
+    const filters = filtersFromValues(values)
 
     mutation.mutate(filters, {
       onSuccess: (result) => {
@@ -104,10 +110,21 @@ export function JobSearchForm({ onResults }: { onResults: (jobs: SearchJob[], co
             <label htmlFor="search-sort" className="text-sm font-medium">Sort ID</label>
             <Input id="search-sort" type="number" {...form.register("sortBy")} />
           </div>
-          <div className="flex items-end">
-            <Button type="submit" disabled={mutation.isPending}>
+          <div className="flex items-end gap-2">
+            <Button type="submit" disabled={mutation.isPending || saveMutation.isPending}>
               <Search />
               {mutation.isPending ? "Searching…" : "Search jobs"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={mutation.isPending || saveMutation.isPending}
+              onClick={() => saveMutation.mutate(filtersFromValues(form.getValues()), {
+                onSuccess: (savedSearch) => toast.success(`Saved “${savedSearch.text}” search`),
+                onError: (error) => toast.error("Could not save search", { description: errorMessage(error) }),
+              })}
+            >
+              {saveMutation.isPending ? "Saving…" : "Save search"}
             </Button>
           </div>
         </form>

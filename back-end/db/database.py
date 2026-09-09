@@ -22,8 +22,23 @@ engine = create_engine(
 
 
 def create_tables() -> None:
-    """Create all tables defined in models.py (idempotent)."""
+    """Create tables and add fields introduced after the initial SQLite schema."""
     SQLModel.metadata.create_all(engine)
+
+    # SQLModel's create_all() does not alter an existing table.  Keep the
+    # historical `keyword` table name for the Job.keyword_id foreign key while
+    # upgrading old databases to saved-search records.
+    with engine.begin() as connection:
+        columns = connection.exec_driver_sql("PRAGMA table_info(keyword)").fetchall()
+        if columns and not any(column[1] == "filters_json" for column in columns):
+            connection.exec_driver_sql(
+                "ALTER TABLE keyword ADD COLUMN filters_json TEXT NOT NULL DEFAULT '{}'"
+            )
+        if columns:
+            connection.exec_driver_sql(
+                "UPDATE keyword SET filters_json = json_object('keyword', text) "
+                "WHERE filters_json = '{}' OR filters_json IS NULL"
+            )
 
 
 def get_session():

@@ -1,10 +1,11 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api"
 
-export type Keyword = {
+export type SavedSearch = {
   id: number
   text: string
   active: boolean
   created_at: string
+  filters: SearchFilters
 }
 
 export type JobStatus = "found" | "applied" | "rejected"
@@ -56,27 +57,27 @@ export type SearchResponse = {
 }
 
 export type ScrapeResult = {
-  keywords_searched: number
+  searches_searched: number
   new_jobs: number
   skipped_existing: number
   errors: string[]
   message?: string
 }
 
-export function getKeywords() {
-  return apiGet<Keyword[]>("/keywords")
+export function getSavedSearches() {
+  return apiGet<SavedSearch[]>("/saved-searches")
 }
 
-export function createKeyword(text: string) {
-  return apiPost<Keyword>("/keywords", { text })
+export function saveSearch(filters: SearchFilters) {
+  return apiPost<SavedSearch>("/saved-searches", filters)
 }
 
-export function deleteKeyword(id: number) {
-  return apiDelete(`/keywords/${id}`)
+export function deleteSavedSearch(id: number) {
+  return apiDelete(`/saved-searches/${id}`)
 }
 
-export function setKeywordActive(id: number, active: boolean) {
-  return apiPatch<Keyword>(`/keywords/${id}`, { active })
+export function setSavedSearchActive(id: number, active: boolean) {
+  return apiPatch<SavedSearch>(`/saved-searches/${id}`, { active })
 }
 
 export function getJobs(status?: JobStatus) {

@@ -1,10 +1,8 @@
 "use client"
 
-import { BriefcaseBusiness, Search } from "lucide-react"
+import { BriefcaseBusiness } from "lucide-react"
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { KeywordForm } from "@/components/keyword-form"
-import { KeywordList } from "@/components/keyword-list"
+import { SavedSearchList } from "@/components/saved-search-list"
 import { JobsTable } from "@/components/jobs-table"
 import { ScrapeButton } from "@/components/scrape-button"
 import { JobSearchForm } from "@/components/job-search-form"
@@ -23,21 +21,14 @@ export function JobHuntDashboard() {
             <div className="rounded-lg bg-primary p-2 text-primary-foreground"><BriefcaseBusiness className="size-5" /></div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Job Hunt Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Track keywords, discover new roles, and manage your applications.</p>
+              <p className="text-sm text-muted-foreground">Save JobVision searches, discover new roles, and manage your applications.</p>
             </div>
           </div>
           <ScrapeButton />
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Search className="size-5" /> Add a keyword</CardTitle>
-              <CardDescription>Search terms used by the job scraper.</CardDescription>
-            </CardHeader>
-            <CardContent><KeywordForm /></CardContent>
-          </Card>
-          <KeywordList />
+        <section>
+          <SavedSearchList />
         </section>
 
         <section className="flex flex-col gap-4">

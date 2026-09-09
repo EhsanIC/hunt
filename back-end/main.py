@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager
 
 import httpx
@@ -13,15 +14,15 @@ from db.models import (
     JobStatus,
     JobUpdate,
     Keyword,
-    KeywordCreate,
-    KeywordRead,
-    KeywordUpdate,
+    SavedSearchUpdate,
     SearchRequest,
     SearchResponse,
+    SavedSearchCreate,
+    SavedSearchRead,
 )
-from scraper import search_jobs, search_jobs_with_filters
+from scraper import search_jobs_with_filters
 
-REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between keyword requests
+REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between saved-search requests
 
 
 @asynccontextmanager
@@ -44,60 +45,72 @@ def health():
     return {"status": "green"}
 
 
-# --- TODO Section 3: Keyword Management (CRUD) ---
+# --- Saved JobVision searches ---
 
 
-@app.post("/keywords", response_model=KeywordRead, status_code=201)
-def add_keyword(payload: KeywordCreate):
-    """Add a keyword to the managed list."""
-    text = payload.text.strip()
-    if not text:
-        raise HTTPException(status_code=422, detail="Keyword text must not be empty")
+def _saved_search_read(saved_search: Keyword) -> SavedSearchRead:
+    try:
+        filters = json.loads(saved_search.filters_json)
+    except (TypeError, json.JSONDecodeError):
+        filters = {"keyword": saved_search.text}
+    return SavedSearchRead(
+        id=saved_search.id,
+        text=saved_search.text,
+        active=saved_search.active,
+        created_at=saved_search.created_at,
+        filters=filters,
+    )
+
+
+def _saved_search_name(payload: SavedSearchCreate) -> str:
+    return payload.keyword.strip() if payload.keyword and payload.keyword.strip() else "All JobVision jobs"
+
+
+@app.post("/saved-searches", response_model=SavedSearchRead, status_code=201)
+def add_saved_search(payload: SavedSearchCreate):
+    """Save a complete custom JobVision search for future scrapes."""
+    filters = payload.model_dump(exclude={"maxPages"}, exclude_none=True)
+    filters["maxPages"] = payload.maxPages
+    name = _saved_search_name(payload)
     with Session(engine) as session:
-        existing = session.exec(select(Keyword).where(Keyword.text == text)).first()
+        existing = session.exec(
+            select(Keyword).where(Keyword.filters_json == json.dumps(filters, sort_keys=True))
+        ).first()
         if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Keyword already exists (id={existing.id})",
-            )
-        keyword = Keyword(text=text)
-        session.add(keyword)
+            raise HTTPException(status_code=409, detail="This search is already saved")
+        saved_search = Keyword(text=name, filters_json=json.dumps(filters, sort_keys=True))
+        session.add(saved_search)
         session.commit()
-        session.refresh(keyword)
-        return keyword
+        session.refresh(saved_search)
+        return _saved_search_read(saved_search)
 
 
-@app.get("/keywords", response_model=list[KeywordRead])
-def list_keywords():
-    """List all keywords."""
+@app.get("/saved-searches", response_model=list[SavedSearchRead])
+def list_saved_searches():
     with Session(engine) as session:
-        return list(session.exec(select(Keyword).order_by(Keyword.id)).all())
+        return [_saved_search_read(item) for item in session.exec(select(Keyword).order_by(Keyword.id)).all()]
 
 
-@app.patch("/keywords/{keyword_id}", response_model=KeywordRead)
-def set_keyword_active(keyword_id: int, update: KeywordUpdate | None = None):
-    """Toggle active/inactive (or set it explicitly with {\"active\": true/false})."""
+@app.patch("/saved-searches/{search_id}", response_model=SavedSearchRead)
+def set_saved_search_active(search_id: int, update: SavedSearchUpdate | None = None):
     with Session(engine) as session:
-        keyword = session.get(Keyword, keyword_id)
-        if not keyword:
-            raise HTTPException(status_code=404, detail="Keyword not found")
-        keyword.active = (
-            update.active if update and update.active is not None else not keyword.active
-        )
-        session.add(keyword)
+        saved_search = session.get(Keyword, search_id)
+        if not saved_search:
+            raise HTTPException(status_code=404, detail="Saved search not found")
+        saved_search.active = update.active if update and update.active is not None else not saved_search.active
+        session.add(saved_search)
         session.commit()
-        session.refresh(keyword)
-        return keyword
+        session.refresh(saved_search)
+        return _saved_search_read(saved_search)
 
 
-@app.delete("/keywords/{keyword_id}", status_code=204)
-def delete_keyword(keyword_id: int):
-    """Remove a keyword."""
+@app.delete("/saved-searches/{search_id}", status_code=204)
+def delete_saved_search(search_id: int):
     with Session(engine) as session:
-        keyword = session.get(Keyword, keyword_id)
-        if not keyword:
-            raise HTTPException(status_code=404, detail="Keyword not found")
-        session.delete(keyword)
+        saved_search = session.get(Keyword, search_id)
+        if not saved_search:
+            raise HTTPException(status_code=404, detail="Saved search not found")
+        session.delete(saved_search)
         session.commit()
 
 
@@ -131,7 +144,7 @@ async def scrape():
     """
     new_count = 0
     skipped_count = 0
-    keywords_searched = 0
+    searches_searched = 0
     errors: list[str] = []
     seen_urls: set[str] = set()
 
@@ -144,11 +157,11 @@ async def scrape():
 
         if not active:
             return {
-                "keywords_searched": 0,
+                "searches_searched": 0,
                 "new_jobs": 0,
                 "skipped_existing": 0,
                 "errors": [],
-                "message": "No active keywords — add some via POST /keywords first.",
+                "message": "No active saved searches — save a custom search first.",
             }
 
         async with httpx.AsyncClient(timeout=20) as client:
@@ -156,11 +169,18 @@ async def scrape():
                 if i > 0:
                     await asyncio.sleep(REQUEST_DELAY_SECONDS)
                 try:
-                    jobs = await search_jobs(client, keyword.text)
-                except Exception as exc:  # keep going: one bad keyword shouldn't kill the run
-                    errors.append(f"keyword {keyword.text!r}: {type(exc).__name__}: {exc}")
+                    try:
+                        filters = json.loads(keyword.filters_json)
+                    except (TypeError, json.JSONDecodeError):
+                        filters = {"keyword": keyword.text}
+                    result = await search_jobs_with_filters(
+                        client, filters, max_pages=filters.get("maxPages", 5)
+                    )
+                    jobs = result["jobs"]
+                except Exception as exc:  # keep going: one bad search shouldn't kill the run
+                    errors.append(f"search {keyword.text!r}: {type(exc).__name__}: {exc}")
                     continue
-                keywords_searched += 1
+                searches_searched += 1
 
                 for job in jobs:
                     if job["url"] in seen_urls:
@@ -187,7 +207,7 @@ async def scrape():
         session.commit()
 
     return {
-        "keywords_searched": keywords_searched,
+        "searches_searched": searches_searched,
         "new_jobs": new_count,
         "skipped_existing": skipped_count,
         "errors": errors,

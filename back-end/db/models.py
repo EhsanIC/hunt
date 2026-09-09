@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
@@ -18,10 +19,17 @@ def utcnow() -> datetime:
 
 
 class Keyword(SQLModel, table=True):
+    """A saved JobVision search.
+
+    The table keeps its historical name so existing jobs can continue pointing
+    at their original saved search records.
+    """
+
     id: int | None = Field(default=None, primary_key=True)
     text: str = Field(index=True)
     active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utcnow)
+    filters_json: str = Field(default="{}")
 
 
 class Job(SQLModel, table=True):
@@ -38,21 +46,35 @@ class Job(SQLModel, table=True):
 # --- API request/response schemas (not tables) ---
 
 
-class KeywordCreate(SQLModel):
-    text: str
-
-
-class KeywordUpdate(SQLModel):
+class SavedSearchUpdate(SQLModel):
     """PATCH body; omit `active` to simply toggle it."""
 
     active: bool | None = None
 
 
-class KeywordRead(SQLModel):
+class SavedSearchCreate(SQLModel):
+    """The complete custom JobVision search to save for future scrapes."""
+
+    model_config = ConfigDict(extra="allow")
+
+    pageSize: int = Field(default=30, ge=1, le=100)
+    sortBy: int = 1
+    keyword: str | None = None
+    locationWrapper: str | None = None
+    jobCategoryUrlTitle: str | None = None
+    workExperiences: list[int] | None = None
+    isRemote: bool = False
+    isInternship: bool = False
+    searchId: str | None = None
+    maxPages: int = Field(default=5, ge=1, le=20)
+
+
+class SavedSearchRead(SQLModel):
     id: int
     text: str
     active: bool
     created_at: datetime
+    filters: dict[str, Any]
 
 
 class JobRead(SQLModel):
