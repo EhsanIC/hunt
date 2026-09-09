@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 
 from db.database import create_tables, engine
@@ -28,6 +29,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -92,7 +99,7 @@ def delete_keyword(keyword_id: int):
         session.commit()
 
 
-# --- TODO Section 6: Scraper + Database + Keywords, wired together ---@app.post("/scrape")
+@app.post("/scrape")
 async def scrape():
     """Scrape all active keywords and store new jobs (deduped by url).
 
