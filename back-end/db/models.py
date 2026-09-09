@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from enum import Enum
 
+from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
 
 
@@ -69,3 +70,51 @@ class JobUpdate(SQLModel):
     """PATCH body: the job's new status (applied / rejected / found)."""
 
     status: JobStatus
+
+
+class SearchRequest(SQLModel):
+    """Filters accepted by JobVision's JobPost/List endpoint.
+
+    The names intentionally match the target API's camelCase payload.  Extra
+    fields are allowed so a newly discovered JobVision filter can be forwarded
+    without changing this app first.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    pageSize: int = Field(default=30, ge=1, le=100)
+    requestedPage: int = Field(default=1, ge=1)
+    sortBy: int = 1
+    keyword: str | None = None
+    locationWrapper: str | None = None
+    jobCategoryUrlTitle: str | None = None
+    workExperiences: list[int] | None = None
+    isRemote: bool | None = None
+    isInternship: bool | None = None
+    searchId: str | None = None
+    # Internal pagination cap; this is never sent to JobVision.
+    maxPages: int = Field(default=5, ge=1, le=20)
+
+
+class SearchJobRead(SQLModel):
+    """Small, stable representation of a JobVision result for the UI."""
+
+    id: int
+    title: str
+    company: str
+    url: str
+    source_site: str
+    is_remote: bool | None = None
+    is_internship: bool | None = None
+    location: str | None = None
+    work_type: str | None = None
+    seniority_level: str | None = None
+
+
+class SearchResponse(SQLModel):
+    currentPage: int
+    pageSize: int
+    jobPostCount: int
+    searchId: str | None = None
+    hasSalaryHistogram: bool | None = None
+    jobs: list[SearchJobRead]

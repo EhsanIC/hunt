@@ -16,8 +16,10 @@ from db.models import (
     KeywordCreate,
     KeywordRead,
     KeywordUpdate,
+    SearchRequest,
+    SearchResponse,
 )
-from scraper import search_jobs
+from scraper import search_jobs, search_jobs_with_filters
 
 REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between keyword requests
 
@@ -97,6 +99,27 @@ def delete_keyword(keyword_id: int):
             raise HTTPException(status_code=404, detail="Keyword not found")
         session.delete(keyword)
         session.commit()
+
+
+@app.post("/search", response_model=SearchResponse)
+async def search(payload: SearchRequest):
+    """Run one custom JobVision search without storing the results.
+
+    The browser URL and RelatedSearch request are presentation/SEO helpers;
+    the listing data comes from JobPost/List and its JSON body.  This endpoint
+    exposes that body directly so callers can combine keyword, location,
+    category, experience, remote, internship, and future filters.
+    """
+    filters = payload.model_dump(exclude={"maxPages"}, exclude_none=True)
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            return await search_jobs_with_filters(
+                client, filters, max_pages=payload.maxPages
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"JobVision request failed: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/scrape")

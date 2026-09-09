@@ -20,6 +20,41 @@ export type Job = {
   status: JobStatus
 }
 
+export type SearchFilters = {
+  pageSize?: number
+  sortBy?: number
+  keyword?: string
+  locationWrapper?: string
+  jobCategoryUrlTitle?: string
+  workExperiences?: number[]
+  isRemote?: boolean
+  isInternship?: boolean
+  searchId?: string | null
+  maxPages?: number
+}
+
+export type SearchJob = {
+  id: number
+  title: string
+  company: string
+  url: string
+  source_site: string
+  is_remote?: boolean | null
+  is_internship?: boolean | null
+  location?: string | null
+  work_type?: string | null
+  seniority_level?: string | null
+}
+
+export type SearchResponse = {
+  currentPage: number
+  pageSize: number
+  jobPostCount: number
+  searchId?: string | null
+  hasSalaryHistogram?: boolean | null
+  jobs: SearchJob[]
+}
+
 export type ScrapeResult = {
   keywords_searched: number
   new_jobs: number
@@ -47,6 +82,10 @@ export function setKeywordActive(id: number, active: boolean) {
 export function getJobs(status?: JobStatus) {
   const query = status ? `?status=${encodeURIComponent(status)}` : ""
   return apiGet<Job[]>(`/jobs${query}`)
+}
+
+export function searchJobs(filters: SearchFilters) {
+  return apiPost<SearchResponse>("/search", filters)
 }
 
 export function scrapeJobs() {

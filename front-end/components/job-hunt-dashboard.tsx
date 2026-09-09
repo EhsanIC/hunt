@@ -1,13 +1,20 @@
 "use client"
 
 import { BriefcaseBusiness, Search } from "lucide-react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { KeywordForm } from "@/components/keyword-form"
 import { KeywordList } from "@/components/keyword-list"
 import { JobsTable } from "@/components/jobs-table"
 import { ScrapeButton } from "@/components/scrape-button"
+import { JobSearchForm } from "@/components/job-search-form"
+import { SearchResults } from "@/components/search-results"
+import type { SearchJob } from "@/lib/job-hunt-api"
 
 export function JobHuntDashboard() {
+  const [searchResults, setSearchResults] = useState<SearchJob[]>([])
+  const [searchTotal, setSearchTotal] = useState<number | null>(null)
+
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-8">
@@ -31,6 +38,11 @@ export function JobHuntDashboard() {
             <CardContent><KeywordForm /></CardContent>
           </Card>
           <KeywordList />
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <JobSearchForm onResults={(jobs, count) => { setSearchResults(jobs); setSearchTotal(count) }} />
+          <SearchResults jobs={searchResults} total={searchTotal} />
         </section>
 
         <section className="flex flex-col gap-4">
