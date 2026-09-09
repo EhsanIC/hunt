@@ -25,8 +25,8 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "The request failed. Please try again."
 }
 
-export function JobsTable({ status }: { status: JobStatus }) {
-  const { data, isPending, isError, error } = useJobs(status)
+export function JobsTable() {
+  const { data, isPending, isError, error } = useJobs()
   const mutation = useUpdateJobStatus()
   const jobs = data ?? emptyJobs
 
@@ -72,14 +72,14 @@ export function JobsTable({ status }: { status: JobStatus }) {
             <Button render={<a href={job.url} target="_blank" rel="noopener noreferrer" />} variant="ghost" size="icon-sm" aria-label={`Open ${job.title}`}>
               <ExternalLink />
             </Button>
-            {status !== "applied" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} applied`} disabled={isUpdating} onClick={() => updateStatus(job, "applied")}><Check /></Button>}
-            {status !== "rejected" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} rejected`} disabled={isUpdating} onClick={() => updateStatus(job, "rejected")}><X /></Button>}
+            {job.status !== "applied" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} applied`} disabled={isUpdating} onClick={() => updateStatus(job, "applied")}><Check /></Button>}
+            {job.status !== "rejected" && <Button variant="ghost" size="icon-sm" aria-label={`Mark ${job.title} rejected`} disabled={isUpdating} onClick={() => updateStatus(job, "rejected")}><X /></Button>}
             {isUpdating && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
           </div>
         )
       },
     },
-  ], [mutation, status, updateStatus])
+  ], [mutation, updateStatus])
 
   const table = useTable({
     features,
@@ -90,13 +90,13 @@ export function JobsTable({ status }: { status: JobStatus }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{statusLabels[status]} jobs</CardTitle>
+        <CardTitle>Found jobs</CardTitle>
       </CardHeader>
       <CardContent>
         {isPending ? <JobsTableSkeleton /> : isError ? (
           <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Unable to load jobs: {errorMessage(error)}</p>
         ) : jobs.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No {status} jobs found.</p>
+          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No jobs found in the database.</p>
         ) : (
           <div className="overflow-x-auto">
             <Table>

@@ -1,18 +1,13 @@
 "use client"
 
-import { useState } from "react"
 import { BriefcaseBusiness, Search } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { KeywordForm } from "@/components/keyword-form"
 import { KeywordList } from "@/components/keyword-list"
 import { JobsTable } from "@/components/jobs-table"
 import { ScrapeButton } from "@/components/scrape-button"
-import { StatusTabs } from "@/components/status-tabs"
-import type { JobStatus } from "@/lib/job-hunt-api"
 
 export function JobHuntDashboard() {
-  const [status, setStatus] = useState<JobStatus>("found")
-
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-8">
@@ -42,11 +37,10 @@ export function JobHuntDashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Job opportunities</h2>
-              <p className="text-sm text-muted-foreground">Review listings and update their application status.</p>
+              <p className="text-sm text-muted-foreground">All jobs currently stored in your database.</p>
             </div>
-            <StatusTabs status={status} onStatusChange={setStatus} />
           </div>
-          <JobsTable status={status} />
+          <JobsTable />
         </section>
       </div>
     </main>

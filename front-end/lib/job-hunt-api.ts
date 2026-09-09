@@ -44,8 +44,9 @@ export function setKeywordActive(id: number, active: boolean) {
   return apiPatch<Keyword>(`/keywords/${id}`, { active })
 }
 
-export function getJobs(status: JobStatus) {
-  return apiGet<Job[]>(`/jobs?status=${encodeURIComponent(status)}`)
+export function getJobs(status?: JobStatus) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ""
+  return apiGet<Job[]>(`/jobs${query}`)
 }
 
 export function scrapeJobs() {
