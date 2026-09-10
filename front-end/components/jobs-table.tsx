@@ -1,11 +1,12 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
-import { Check, ExternalLink, Loader2, X } from "lucide-react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
+import { Check, ExternalLink, Loader2, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { useJobs } from "@/hooks/use-jobs"
 import { useUpdateJobStatus } from "@/hooks/use-update-job-status"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,13 +30,27 @@ export function JobsTable() {
   const { data, isPending, isError, error } = useJobs()
   const { mutate, isPending: isUpdating, variables } = useUpdateJobStatus()
   const [currentPage, setCurrentPage] = useState(1)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all")
+  const deferredSearchTerm = useDeferredValue(searchTerm)
   const jobs = data ?? emptyJobs
-  const pageCount = Math.max(1, Math.ceil(jobs.length / JOBS_PER_PAGE))
+  const filteredJobs = useMemo(() => {
+    const normalizedSearch = deferredSearchTerm.trim().toLocaleLowerCase()
+
+    return jobs.filter((job) => {
+      const matchesStatus = statusFilter === "all" || job.status === statusFilter
+      const matchesSearch = !normalizedSearch || [job.title, job.company, job.source_site]
+        .some((value) => value.toLocaleLowerCase().includes(normalizedSearch))
+
+      return matchesStatus && matchesSearch
+    })
+  }, [deferredSearchTerm, jobs, statusFilter])
+  const pageCount = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE))
   const page = Math.min(currentPage, pageCount)
   const pageStart = (page - 1) * JOBS_PER_PAGE
   const visibleJobs = useMemo(
-    () => jobs.slice(pageStart, pageStart + JOBS_PER_PAGE),
-    [jobs, pageStart],
+    () => filteredJobs.slice(pageStart, pageStart + JOBS_PER_PAGE),
+    [filteredJobs, pageStart],
   )
 
   useEffect(() => {
@@ -43,6 +58,7 @@ export function JobsTable() {
       toast.error("Unable to load jobs", { description: errorMessage(error) })
     }
   }, [error, isError])
+
 
   const updateStatus = useCallback((job: Job, nextStatus: JobStatus) => {
     mutate(
@@ -56,14 +72,45 @@ export function JobsTable() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="gap-4">
         <CardTitle>Stored jobs</CardTitle>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => {
+                setSearchTerm(event.target.value)
+                setCurrentPage(1)
+              }}
+              placeholder="Search title, company, or source"
+              aria-label="Search jobs"
+              className="pl-8"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value as JobStatus | "all")
+              setCurrentPage(1)
+            }}
+            aria-label="Filter jobs by status"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All statuses</option>
+            <option value="found">Found</option>
+            <option value="applied">Applied</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
       </CardHeader>
       <CardContent>
         {isPending ? <JobsTableSkeleton /> : isError ? (
           <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Unable to load jobs: {errorMessage(error)}</p>
         ) : jobs.length === 0 ? (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No jobs found in the database.</p>
+        ) : filteredJobs.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No jobs match the current filters.</p>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -91,7 +138,7 @@ export function JobsTable() {
             {pageCount > 1 && (
               <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t pt-4 sm:flex-row">
                 <p className="text-sm text-muted-foreground">
-                  Showing {pageStart + 1}–{Math.min(pageStart + JOBS_PER_PAGE, jobs.length)} of {jobs.length} jobs
+                  Showing {pageStart + 1}–{Math.min(pageStart + JOBS_PER_PAGE, filteredJobs.length)} of {filteredJobs.length} matching jobs
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
