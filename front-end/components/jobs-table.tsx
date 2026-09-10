@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { flexRender, tableFeatures, useTable } from "@tanstack/react-table"
 import { Check, ExternalLink, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
@@ -15,6 +15,7 @@ import type { Job, JobStatus } from "@/lib/job-hunt-api"
 
 const features = tableFeatures({})
 const emptyJobs: Job[] = []
+const JOBS_PER_PAGE = 30
 
 const statusLabels: Record<JobStatus, string> = {
   found: "Found",
@@ -29,7 +30,12 @@ function errorMessage(error: unknown) {
 export function JobsTable() {
   const { data, isPending, isError, error } = useJobs()
   const mutation = useUpdateJobStatus()
+  const [currentPage, setCurrentPage] = useState(1)
   const jobs = data ?? emptyJobs
+  const pageCount = Math.max(1, Math.ceil(jobs.length / JOBS_PER_PAGE))
+  const page = Math.min(currentPage, pageCount)
+  const pageStart = (page - 1) * JOBS_PER_PAGE
+  const visibleJobs = jobs.slice(pageStart, pageStart + JOBS_PER_PAGE)
 
   useEffect(() => {
     if (isError) {
@@ -91,13 +97,13 @@ export function JobsTable() {
   const table = useTable({
     features,
     columns,
-    data: jobs,
+    data: visibleJobs,
   })
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Found jobs</CardTitle>
+        <CardTitle>Stored jobs</CardTitle>
       </CardHeader>
       <CardContent>
         {isPending ? <JobsTableSkeleton /> : isError ? (
@@ -105,16 +111,46 @@ export function JobsTable() {
         ) : jobs.length === 0 ? (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No jobs found in the database.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => <TableRow key={headerGroup.id}>{headerGroup.headers.map((header) => <TableHead key={header.id} className={header.column.id === "actions" ? "text-right" : undefined}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}</TableRow>)}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getAllCells().map((cell) => <TableCell key={cell.id} className={cell.column.id === "actions" ? "text-right" : undefined}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>)}
-              </TableBody>
-            </Table>
-          </div>
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => <TableRow key={headerGroup.id}>{headerGroup.headers.map((header) => <TableHead key={header.id} className={header.column.id === "actions" ? "text-right" : undefined}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}</TableRow>)}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getAllCells().map((cell) => <TableCell key={cell.id} className={cell.column.id === "actions" ? "text-right" : undefined}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>)}
+                </TableBody>
+              </Table>
+            </div>
+            {pageCount > 1 && (
+              <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t pt-4 sm:flex-row">
+                <p className="text-sm text-muted-foreground">
+                  Showing {pageStart + 1}–{Math.min(pageStart + JOBS_PER_PAGE, jobs.length)} of {jobs.length} jobs
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 1}
+                    onClick={() => setCurrentPage((page) => page - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="min-w-20 text-center text-sm text-muted-foreground">
+                    Page {page} of {pageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === pageCount}
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
