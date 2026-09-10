@@ -57,6 +57,7 @@ class Job(SQLModel, table=True):
     is_remote: bool | None = None
     is_internship: bool | None = None
     work_type: str | None = None
+    experience_level: str | None = None
     seniority_level: str | None = None
     company_logo_url: str | None = None
     company_description: str | None = None
@@ -126,6 +127,10 @@ class JobRead(SQLModel):
     source_site: str
     found_at: datetime
     status: JobStatus
+    is_internship: bool | None = None
+    location: str | None = None
+    experience_level: str | None = None
+    is_remote: bool | None = None
 
 
 class JobUpdate(SQLModel):

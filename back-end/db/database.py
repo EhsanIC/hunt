@@ -35,6 +35,7 @@ JOB_MIGRATION_COLUMNS = {
     "is_remote": "BOOLEAN",
     "is_internship": "BOOLEAN",
     "work_type": "TEXT",
+    "experience_level": "TEXT",
     "seniority_level": "TEXT",
     "company_logo_url": "TEXT",
     "company_description": "TEXT",

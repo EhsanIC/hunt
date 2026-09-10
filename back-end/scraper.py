@@ -87,6 +87,11 @@ def _to_search_job(post: dict[str, Any], page: int = 1, search_id: str | None = 
             province.get("titleEn"),
         ),
         "work_type": _first_text(work_type.get("titleFa"), work_type.get("titleEn"), post.get("workType")),
+        "experience_level": _first_text(
+            post.get("experienceLevel"),
+            post.get("workExperience"),
+            post.get("workExperienceTitle"),
+        ),
         "seniority_level": _first_text(seniority.get("titleFa"), seniority.get("titleEn"), post.get("seniorityLevel")),
         "description": _first_text(post.get("description"), post.get("jobDescription"), post.get("content")),
         "responsibilities": _first_text(post.get("responsibilities"), post.get("duties")),

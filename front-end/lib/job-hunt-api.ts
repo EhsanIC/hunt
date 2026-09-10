@@ -19,6 +19,10 @@ export type Job = {
   source_site: string
   found_at: string
   status: JobStatus
+  is_internship?: boolean | null
+  location?: string | null
+  experience_level?: string | null
+  is_remote?: boolean | null
 }
 
 export type SearchFilters = {
@@ -43,6 +47,7 @@ export type SearchJob = {
   is_remote?: boolean | null
   is_internship?: boolean | null
   location?: string | null
+  experience_level?: string | null
   work_type?: string | null
   seniority_level?: string | null
 }

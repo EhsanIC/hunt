@@ -32,6 +32,10 @@ export function JobsTable() {
   const [currentPage, setCurrentPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all")
+  const [internshipFilter, setInternshipFilter] = useState<"all" | "internship" | "non-internship">("all")
+  const [locationFilter, setLocationFilter] = useState("all")
+  const [experienceFilter, setExperienceFilter] = useState("all")
+  const [remoteFilter, setRemoteFilter] = useState<"all" | "remote" | "non-remote">("all")
   const deferredSearchTerm = useDeferredValue(searchTerm)
   const jobs = data ?? emptyJobs
   const filteredJobs = useMemo(() => {
@@ -39,12 +43,25 @@ export function JobsTable() {
 
     return jobs.filter((job) => {
       const matchesStatus = statusFilter === "all" || job.status === statusFilter
+      const matchesInternship = internshipFilter === "all"
+        || (internshipFilter === "internship" && job.is_internship === true)
+        || (internshipFilter === "non-internship" && job.is_internship === false)
+      const matchesLocation = locationFilter === "all" || job.location === locationFilter
+      const matchesExperience = experienceFilter === "all" || job.experience_level === experienceFilter
+      const matchesRemote = remoteFilter === "all"
+        || (remoteFilter === "remote" && job.is_remote === true)
+        || (remoteFilter === "non-remote" && job.is_remote === false)
       const matchesSearch = !normalizedSearch || [job.title, job.company, job.source_site]
         .some((value) => value.toLocaleLowerCase().includes(normalizedSearch))
 
-      return matchesStatus && matchesSearch
+      return matchesStatus && matchesInternship && matchesLocation && matchesExperience && matchesRemote && matchesSearch
     })
-  }, [deferredSearchTerm, jobs, statusFilter])
+  }, [deferredSearchTerm, experienceFilter, internshipFilter, jobs, locationFilter, remoteFilter, statusFilter])
+
+  const filterValues = useMemo(() => ({
+    locations: Array.from(new Set(jobs.map((job) => job.location).filter((value): value is string => Boolean(value)))).sort(),
+    experiences: Array.from(new Set(jobs.map((job) => job.experience_level).filter((value): value is string => Boolean(value)))).sort(),
+  }), [jobs])
   const pageCount = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE))
   const page = Math.min(currentPage, pageCount)
   const pageStart = (page - 1) * JOBS_PER_PAGE
@@ -89,11 +106,10 @@ export function JobsTable() {
             />
           </div>
           <select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value as JobStatus | "all")
-              setCurrentPage(1)
-            }}
+            value={statusFilter}              onChange={(event) => {
+                setStatusFilter(event.target.value as JobStatus | "all")
+                setCurrentPage(1)
+              }}
             aria-label="Filter jobs by status"
             className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
@@ -101,6 +117,56 @@ export function JobsTable() {
             <option value="found">Found</option>
             <option value="applied">Applied</option>
             <option value="rejected">Rejected</option>
+          </select>
+          <select
+            value={internshipFilter}
+            onChange={(event) => {
+              setInternshipFilter(event.target.value as typeof internshipFilter)
+              setCurrentPage(1)
+            }}
+            aria-label="Filter jobs by internship"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All internship types</option>
+            <option value="internship">Internship</option>
+            <option value="non-internship">Non-internship</option>
+          </select>
+          <select
+            value={locationFilter}
+            onChange={(event) => {
+              setLocationFilter(event.target.value)
+              setCurrentPage(1)
+            }}
+            aria-label="Filter jobs by location"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All locations</option>
+            {filterValues.locations.map((location) => <option key={location} value={location}>{location}</option>)}
+          </select>
+          <select
+            value={experienceFilter}
+            onChange={(event) => {
+              setExperienceFilter(event.target.value)
+              setCurrentPage(1)
+            }}
+            aria-label="Filter jobs by experience"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All experience levels</option>
+            {filterValues.experiences.map((experience) => <option key={experience} value={experience}>{experience}</option>)}
+          </select>
+          <select
+            value={remoteFilter}
+            onChange={(event) => {
+              setRemoteFilter(event.target.value as typeof remoteFilter)
+              setCurrentPage(1)
+            }}
+            aria-label="Filter jobs by remote status"
+            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="all">All remote options</option>
+            <option value="remote">Remote</option>
+            <option value="non-remote">Non-remote</option>
           </select>
         </div>
       </CardHeader>

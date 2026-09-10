@@ -244,6 +244,7 @@ async def scrape():
                         existing.is_remote = _optional_bool(job.get("is_remote"))
                         existing.is_internship = _optional_bool(job.get("is_internship"))
                         existing.work_type = job.get("work_type")
+                        existing.experience_level = job.get("experience_level")
                         existing.seniority_level = job.get("seniority_level")
                         existing.company_logo_url = job.get("company_logo_url")
                         existing.company_description = job.get("company_description")
@@ -277,9 +278,9 @@ async def scrape():
                         salary_text=job.get("salary_text"),
                         location=job.get("location"),
                         is_remote=_optional_bool(job.get("is_remote")),
-                        is_internship=_optional_bool(job.get("is_internship")),
-                        work_type=job.get("work_type"),
-                        seniority_level=job.get("seniority_level"),
+                        is_internship=_optional_bool(job.get("is_internship")),                            work_type=job.get("work_type"),
+                            experience_level=job.get("experience_level"),
+                            seniority_level=job.get("seniority_level"),
                         company_logo_url=job.get("company_logo_url"),
                         company_description=job.get("company_description"),
                         company_page_url=job.get("company_page_url"),
