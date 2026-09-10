@@ -42,6 +42,40 @@ class Job(SQLModel, table=True):
     found_at: datetime = Field(default_factory=utcnow)
     status: JobStatus = Field(default=JobStatus.FOUND)
 
+    # Normalized listing data. These are nullable because older database rows
+    # and some JobVision listings may not contain every field.
+    source_job_id: int | None = Field(default=None, index=True)
+    description: str | None = None
+    responsibilities: str | None = None
+    requirements: str | None = None
+    skills_json: str | None = None
+    salary_min: float | None = None
+    salary_max: float | None = None
+    salary_currency: str | None = None
+    salary_text: str | None = None
+    location: str | None = None
+    is_remote: bool | None = None
+    is_internship: bool | None = None
+    work_type: str | None = None
+    seniority_level: str | None = None
+    company_logo_url: str | None = None
+    company_description: str | None = None
+    company_page_url: str | None = None
+    posted_at: str | None = None
+    expires_at: str | None = None
+
+    # Scrape/search provenance and the complete source payload.
+    search_id: str | None = None
+    source_page: int | None = None
+    matched_search_ids_json: str | None = None
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    raw_data_json: str | None = None
+
+    # User-managed workflow metadata, not supplied by JobVision.
+    application_notes: str | None = None
+    rejection_reason: str | None = None
+    interview_notes: str | None = None
+
 
 # --- API request/response schemas (not tables) ---
 
@@ -78,6 +112,12 @@ class SavedSearchRead(SQLModel):
 
 
 class JobRead(SQLModel):
+    """Stable list response kept small so the existing UI stays fast.
+
+    The expanded fields are stored in SQLite but are not sent in the list
+    endpoint until a detail endpoint/UI is added.
+    """
+
     id: int
     keyword_id: int
     title: str

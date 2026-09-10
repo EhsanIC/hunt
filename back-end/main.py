@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 import httpx
@@ -23,6 +24,40 @@ from db.models import (
 from scraper import search_jobs_with_filters
 
 REQUEST_DELAY_SECONDS = 1.0  # be a good citizen: pause between saved-search requests
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _optional_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0"}:
+            return False
+    return None
+
+
+def _job_json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True) if value is not None else None
+
+
+def _matched_search_ids(existing: Job, search_id: int) -> str:
+    try:
+        values = json.loads(existing.matched_search_ids_json or "[]")
+    except (TypeError, json.JSONDecodeError):
+        values = []
+    if not isinstance(values, list):
+        values = []
+    if search_id not in values:
+        values.append(search_id)
+    return _job_json(values) or "[]"
 
 
 @asynccontextmanager
@@ -146,7 +181,7 @@ async def scrape():
     skipped_count = 0
     searches_searched = 0
     errors: list[str] = []
-    seen_urls: set[str] = set()
+    seen_urls: dict[str, Job] = {}
 
     with Session(engine) as session:
         active = list(
@@ -183,25 +218,81 @@ async def scrape():
                 searches_searched += 1
 
                 for job in jobs:
-                    if job["url"] in seen_urls:
-                        continue
-                    seen_urls.add(job["url"])
-                    existing = session.exec(
-                        select(Job).where(Job.url == job["url"])
-                    ).first()
+                    existing = seen_urls.get(job["url"])
+                    if existing is None:
+                        existing = session.exec(
+                            select(Job).where(Job.url == job["url"])
+                        ).first()
+
                     if existing:
+                        # Refresh source metadata while preserving the user's
+                        # workflow status and notes. A job can match several
+                        # saved searches, so retain all matching search IDs.
+                        existing.title = job["title"]
+                        existing.company = job["company"]
+                        existing.source_job_id = job.get("source_job_id")
+                        existing.source_site = job["source_site"]
+                        existing.description = job.get("description")
+                        existing.responsibilities = job.get("responsibilities")
+                        existing.requirements = job.get("requirements")
+                        existing.skills_json = _job_json(job.get("skills"))
+                        existing.salary_min = job.get("salary_min")
+                        existing.salary_max = job.get("salary_max")
+                        existing.salary_currency = job.get("salary_currency")
+                        existing.salary_text = job.get("salary_text")
+                        existing.location = job.get("location")
+                        existing.is_remote = _optional_bool(job.get("is_remote"))
+                        existing.is_internship = _optional_bool(job.get("is_internship"))
+                        existing.work_type = job.get("work_type")
+                        existing.seniority_level = job.get("seniority_level")
+                        existing.company_logo_url = job.get("company_logo_url")
+                        existing.company_description = job.get("company_description")
+                        existing.company_page_url = job.get("company_page_url")
+                        existing.posted_at = job.get("posted_at")
+                        existing.expires_at = job.get("expires_at")
+                        existing.search_id = job.get("search_id")
+                        existing.source_page = job.get("source_page")
+                        existing.matched_search_ids_json = _matched_search_ids(existing, keyword.id)
+                        existing.last_seen_at = _utcnow()
+                        existing.raw_data_json = _job_json(job.get("raw_data"))
+                        session.add(existing)
                         skipped_count += 1
                         continue
-                    session.add(
-                        Job(
-                            keyword_id=keyword.id,
-                            title=job["title"],
-                            company=job["company"],
-                            url=job["url"],
-                            source_site=job["source_site"],
-                            status=JobStatus.FOUND,
-                        )
+
+                    new_job = Job(
+                        keyword_id=keyword.id,
+                        source_job_id=job.get("source_job_id"),
+                        title=job["title"],
+                        company=job["company"],
+                        url=job["url"],
+                        source_site=job["source_site"],
+                        status=JobStatus.FOUND,
+                        description=job.get("description"),
+                        responsibilities=job.get("responsibilities"),
+                        requirements=job.get("requirements"),
+                        skills_json=_job_json(job.get("skills")),
+                        salary_min=job.get("salary_min"),
+                        salary_max=job.get("salary_max"),
+                        salary_currency=job.get("salary_currency"),
+                        salary_text=job.get("salary_text"),
+                        location=job.get("location"),
+                        is_remote=_optional_bool(job.get("is_remote")),
+                        is_internship=_optional_bool(job.get("is_internship")),
+                        work_type=job.get("work_type"),
+                        seniority_level=job.get("seniority_level"),
+                        company_logo_url=job.get("company_logo_url"),
+                        company_description=job.get("company_description"),
+                        company_page_url=job.get("company_page_url"),
+                        posted_at=job.get("posted_at"),
+                        expires_at=job.get("expires_at"),
+                        search_id=job.get("search_id"),
+                        source_page=job.get("source_page"),
+                        matched_search_ids_json=_job_json([keyword.id]),
+                        last_seen_at=_utcnow(),
+                        raw_data_json=_job_json(job.get("raw_data")),
                     )
+                    session.add(new_job)
+                    seen_urls[job["url"]] = new_job
                     new_count += 1
 
         session.commit()

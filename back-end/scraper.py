@@ -1,8 +1,8 @@
 """JobVision API client.
 
 The target site builds a route for display, but the real search is the POST
-request to JobPost/List.  Keep the filters in the JSON body; do not try to
-construct or scrape the browser URL.  Optional filter names are passed through
+request to JobPost/List. Keep the filters in the JSON body; do not try to
+construct or scrape the browser URL. Optional filter names are passed through
 as-is because JobVision has more filter fields than this app currently renders.
 """
 
@@ -35,7 +35,24 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
-def _to_search_job(post: dict[str, Any]) -> dict[str, Any] | None:
+def _first_text(*values: Any) -> str | None:
+    for value in values:
+        text = _text(value)
+        if text:
+            return text
+    return None
+
+
+def _number(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_search_job(post: dict[str, Any], page: int = 1, search_id: str | None = None) -> dict[str, Any] | None:
     jid = post.get("id")
     if jid is None:
         return None
@@ -47,26 +64,59 @@ def _to_search_job(post: dict[str, Any]) -> dict[str, Any] | None:
     province = location.get("province") or {}
     work_type = post.get("workType") or {}
     seniority = post.get("seniorityLevel") or {}
+    salary = post.get("salary") or post.get("salaryRange") or {}
 
-    return {
+    skills = post.get("skills")
+    if skills is None:
+        skills = post.get("skillList") or properties.get("skills")
+
+    job = {
         "id": int(jid),
-        "title": _text(post.get("title")) or "Untitled job",
-        "company": _text(company.get("nameFa") or company.get("nameEn")) or "Unknown company",
+        "source_job_id": int(jid),
+        "title": _first_text(post.get("title")) or "Untitled job",
+        "company": _first_text(company.get("nameFa"), company.get("nameEn")) or "Unknown company",
         "url": JOB_URL_TEMPLATE.format(id=jid),
         "source_site": SOURCE_SITE,
-        "is_remote": properties.get("isRemote"),
-        "is_internship": properties.get("isInternship"),
-        "location": _text(city.get("titleFa") or city.get("titleEn") or province.get("titleFa") or province.get("titleEn")),
-        "work_type": _text(work_type.get("titleFa") or work_type.get("titleEn")),
-        "seniority_level": _text(seniority.get("titleFa") or seniority.get("titleEn")),
+        "is_remote": properties.get("isRemote", post.get("isRemote")),
+        "is_internship": properties.get("isInternship", post.get("isInternship")),
+        "location": _first_text(
+            location.get("title"),
+            city.get("titleFa"),
+            city.get("titleEn"),
+            province.get("titleFa"),
+            province.get("titleEn"),
+        ),
+        "work_type": _first_text(work_type.get("titleFa"), work_type.get("titleEn"), post.get("workType")),
+        "seniority_level": _first_text(seniority.get("titleFa"), seniority.get("titleEn"), post.get("seniorityLevel")),
+        "description": _first_text(post.get("description"), post.get("jobDescription"), post.get("content")),
+        "responsibilities": _first_text(post.get("responsibilities"), post.get("duties")),
+        "requirements": _first_text(post.get("requirements"), post.get("qualifications")),
+        "skills": skills,
+        "salary_min": _number(salary.get("min") if isinstance(salary, dict) else None),
+        "salary_max": _number(salary.get("max") if isinstance(salary, dict) else None),
+        "salary_currency": _first_text(
+            salary.get("currency") if isinstance(salary, dict) else None,
+            salary.get("currencyCode") if isinstance(salary, dict) else None,
+        ),
+        "salary_text": _first_text(
+            salary.get("text") if isinstance(salary, dict) else None,
+            post.get("salaryText"),
+        ),
+        "company_logo_url": _first_text(company.get("logo"), company.get("logoUrl"), company.get("logoUrlFa")),
+        "company_description": _first_text(company.get("description"), company.get("about")),
+        "company_page_url": _first_text(company.get("pageUrl"), company.get("url")),
+        "posted_at": _first_text(post.get("postedAt"), post.get("createdAt"), post.get("publishDate")),
+        "expires_at": _first_text(post.get("expiresAt"), post.get("expireDate"), post.get("deadline")),
+        "search_id": search_id,
+        "source_page": page,
+        "raw_data": post,
     }
+    return job
 
 
 def _api_body(filters: dict[str, Any], page: int) -> dict[str, Any]:
     """Build a clean JobVision payload and omit only unset optional values."""
     body = {**BASE_BODY, **filters, "requestedPage": page}
-    # Keep searchId:null because it is part of JobVision's initial request
-    # contract; omit other unset optional filters.
     return {
         key: value
         for key, value in body.items()
@@ -81,14 +131,8 @@ async def search_jobs_with_filters(
 ) -> dict[str, Any]:
     """Search JobVision with arbitrary supported filters.
 
-    Examples of useful values::
-
-        {"keyword": "react", "locationWrapper": "mashhad",
-         "jobCategoryUrlTitle": "developer", "workExperiences": [-1],
-         "isRemote": True, "isInternship": True, "sortBy": 1}
-
-    ``maxPages`` is app-only and is not sent to JobVision.  The response keeps
-    the API metadata and returns a normalized ``jobs`` array.
+    The normalized jobs retain both commonly used fields and the complete
+    source listing in ``raw_data`` for future field extraction.
     """
     if not isinstance(filters, dict):
         raise ValueError("filters must be an object")
@@ -118,14 +162,13 @@ async def search_jobs_with_filters(
             total = data["jobPostCount"]
         if data.get("searchId") is not None:
             search_id = str(data["searchId"])
-            # The first response can issue a search id for subsequent pages.
             filters["searchId"] = search_id
 
         posts = data.get("jobPosts") or []
         for post in posts:
             if not isinstance(post, dict):
                 continue
-            job = _to_search_job(post)
+            job = _to_search_job(post, page=page, search_id=search_id)
             if job and job["id"] not in seen_ids:
                 seen_ids.add(job["id"])
                 jobs.append(job)
