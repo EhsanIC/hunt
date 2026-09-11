@@ -317,7 +317,32 @@ def list_jobs(status: JobStatus | None = None):
         query = select(Job).order_by(Job.id)
         if status is not None:
             query = query.where(Job.status == status)
-        return list(session.exec(query).all())
+        jobs = list(session.exec(query).all())
+        if not jobs:
+            return []
+        keyword_ids = {j.keyword_id for j in jobs if j.keyword_id is not None}
+        kw_rows = session.exec(select(Keyword).where(Keyword.id.in_(keyword_ids))).all() if keyword_ids else []
+        kw_map = {k.id: k.text for k in kw_rows}
+        return [
+            JobRead(
+                id=j.id,
+                keyword_id=j.keyword_id,
+                keyword=kw_map.get(j.keyword_id),
+                title=j.title,
+                company=j.company,
+                url=j.url,
+                source_site=j.source_site,
+                found_at=j.found_at,
+                status=j.status,
+                is_internship=j.is_internship,
+                location=j.location,
+                experience_level=j.experience_level,
+                is_remote=j.is_remote,
+                work_type=j.work_type,
+                seniority_level=j.seniority_level,
+            )
+            for j in jobs
+        ]
 
 
 @app.patch("/jobs/{job_id}", response_model=JobRead)
@@ -331,5 +356,22 @@ def update_job_status(job_id: int, update: JobUpdate):
         session.add(job)
         session.commit()
         session.refresh(job)
-        return job
+        kw = session.get(Keyword, job.keyword_id) if job.keyword_id else None
+        return JobRead(
+            id=job.id,
+            keyword_id=job.keyword_id,
+            keyword=kw.text if kw else None,
+            title=job.title,
+            company=job.company,
+            url=job.url,
+            source_site=job.source_site,
+            found_at=job.found_at,
+            status=job.status,
+            is_internship=job.is_internship,
+            location=job.location,
+            experience_level=job.experience_level,
+            is_remote=job.is_remote,
+            work_type=job.work_type,
+            seniority_level=job.seniority_level,
+        )
 

@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -7,8 +8,8 @@ from sqlmodel import Session, SQLModel, create_engine
 # (db/models.py does not import database.py, so there is no circular import).
 from db.models import Job, Keyword  # noqa: F401
 
-DB_FILE = "jobs.db"
-DATABASE_URL = f"sqlite:///{DB_FILE}"
+DB_FILE = Path(__file__).resolve().parent.parent / "jobs.db"
+DATABASE_URL = f"sqlite:///{DB_FILE.as_posix()}"
 
 # Python 3.12+ deprecates sqlite3's default datetime adapter; register our own
 # so timestamps are stored as ISO-8601 strings without DeprecationWarnings.

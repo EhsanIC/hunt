@@ -13,6 +13,7 @@ export type JobStatus = "found" | "applied" | "rejected"
 export type Job = {
   id: number
   keyword_id: number
+  keyword?: string | null
   title: string
   company: string
   url: string
@@ -23,6 +24,8 @@ export type Job = {
   location?: string | null
   experience_level?: string | null
   is_remote?: boolean | null
+  work_type?: string | null
+  seniority_level?: string | null
 }
 
 export type SearchFilters = {

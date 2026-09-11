@@ -113,14 +113,15 @@ class SavedSearchRead(SQLModel):
 
 
 class JobRead(SQLModel):
-    """Stable list response kept small so the existing UI stays fast.
+    """List response including the fields needed for filtering and display.
 
-    The expanded fields are stored in SQLite but are not sent in the list
-    endpoint until a detail endpoint/UI is added.
+    `keyword` is the saved-search text (denormalized from Keyword) so the UI
+    can filter/show which search found the row without a second fetch.
     """
 
     id: int
     keyword_id: int
+    keyword: str | None = None
     title: str
     company: str
     url: str
@@ -131,6 +132,8 @@ class JobRead(SQLModel):
     location: str | None = None
     experience_level: str | None = None
     is_remote: bool | None = None
+    work_type: str | None = None
+    seniority_level: str | None = None
 
 
 class JobUpdate(SQLModel):

@@ -52,6 +52,20 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _format_experience(years: Any) -> str | None:
+    if years is None:
+        return None
+    try:
+        y = int(years)
+    except (TypeError, ValueError):
+        return None
+    if y == 0:
+        return "No experience"
+    if y == 1:
+        return "1 year"
+    return f"{y} years"
+
+
 def _to_search_job(post: dict[str, Any], page: int = 1, search_id: str | None = None) -> dict[str, Any] | None:
     jid = post.get("id")
     if jid is None:
@@ -65,6 +79,9 @@ def _to_search_job(post: dict[str, Any], page: int = 1, search_id: str | None = 
     work_type = post.get("workType") or {}
     seniority = post.get("seniorityLevel") or {}
     salary = post.get("salary") or post.get("salaryRange") or {}
+
+    exp_years = properties.get("requiredRelatedExperienceYears")
+    formatted_exp = _format_experience(exp_years)
 
     skills = post.get("skills")
     if skills is None:
@@ -91,7 +108,8 @@ def _to_search_job(post: dict[str, Any], page: int = 1, search_id: str | None = 
             post.get("experienceLevel"),
             post.get("workExperience"),
             post.get("workExperienceTitle"),
-        ),
+        )
+        or formatted_exp,
         "seniority_level": _first_text(seniority.get("titleFa"), seniority.get("titleEn"), post.get("seniorityLevel")),
         "description": _first_text(post.get("description"), post.get("jobDescription"), post.get("content")),
         "responsibilities": _first_text(post.get("responsibilities"), post.get("duties")),
